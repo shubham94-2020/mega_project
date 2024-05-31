@@ -1,0 +1,11 @@
+{
+  "name": "mega_project",
+  "version": "1.0.0",
+  "description": "making maga project at backend",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "shubham patil",
+  "license": "ISC"
+}
