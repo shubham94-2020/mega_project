@@ -32,7 +32,7 @@ const UserSchema = new mongoose.Schema(
     },
     CoverImage: {
       type: String, //cloudinary url
-      required: true,
+      default:'',
     },
     watchHistory: [
       {
@@ -106,6 +106,6 @@ UserSchema.pre('save', async function (next) {
     );
   };
   // Export the User model
-  const User = mongoose.model('User', UserSchema);
+  export const User = mongoose.model('User', UserSchema);
   
-  module.exports = User;
+  // module.exports = User;
