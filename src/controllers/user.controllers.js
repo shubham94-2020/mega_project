@@ -4,7 +4,6 @@ import { ApiError } from "../utils/ApiError.js"; // Custom error class for handl
 import { User } from "../models/user.model.js"; // Mongoose model for interacting with the User collection in MongoDB
 import { uploadOnCloudinary } from "../utils/cloudinary.js"; // Utility function to upload files to Cloudinary and get the URL
 import { ApiResponse } from "../utils/ApiResponse.js"; // Custom response class for formatting API responses
-
 const generateAccessTokenAndRefreshToken = async (user_id) => {
   try {
     const user = await User.findOne(user_id);
@@ -86,7 +85,7 @@ const registerUser = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
   // Get input from the request body
   const { username, email, password } = req.body;
-
+  console.log(username, password);
   // Check if username and password are provided
   if (!username || !password) {
     throw new ApiError(400, "Username and password are required!");
@@ -105,23 +104,27 @@ const loginUser = asyncHandler(async (req, res) => {
   }
 
   // Generate access and refresh tokens for the authenticated user
-  const { AccessToken, RefreshToken } = await generateAccessTokenAndRefreshToken(user._id);
+  const { AccessToken, RefreshToken } =
+    await generateAccessTokenAndRefreshToken(user._id);
 
   // Find the user by ID and exclude password and refreshToken fields
-  const logged_user = await User.findById(user._id).select("-password -refreshToken");
+  const logged_user = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
 
   // Set options for the cookies (HTTP only and secure)
   const options = {
     httpOnly: true, // Cookie cannot be accessed or modified by JavaScript
-    secure: true,   // Cookie is only sent over HTTPS
+    secure: true, // Cookie is only sent over HTTPS
   };
 
   // Send the response with the user data and tokens
   return res
     .status(200) // Set HTTP status to 200 (OK)
-    .cookie("AccessToken", AccessToken, options) // Set AccessToken cookie
-    .cookie("RefreshToken", RefreshToken, options) // Set RefreshToken cookie
-    .json( // Correctly format the JSON response
+    .cookie("accessToken", AccessToken, options) // Set AccessToken cookie
+    .cookie("refreshToken", RefreshToken, options) // Set RefreshToken cookie
+    .json(
+      // Correctly format the JSON response
       new ApiResponse(
         200, // Status code for the ApiResponse
         {
@@ -134,4 +137,37 @@ const loginUser = asyncHandler(async (req, res) => {
     );
 });
 
-export { registerUser };
+const logoutUser = asyncHandler(async (req, res) => {
+  try {
+    //remove refresh token using middleware
+    //remove cookies form client
+    await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        $set: {
+          refreshToken: undefined,
+        },
+      },
+      {
+        new: true,
+      }
+    );
+    const options = {
+      httpOnly: true,
+      secure: true,
+    };
+    console.log("done from logout controller!");
+    return res.status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken",options)
+    .json(new ApiResponse(200,{},"user loggedout succesfully!"))
+  } 
+  
+  
+  catch (error) {
+    console.error("Error in logout controller: ", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+export { registerUser, loginUser, logoutUser };
