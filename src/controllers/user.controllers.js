@@ -6,6 +6,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js"; // Utility function
 import { ApiResponse } from "../utils/ApiResponse.js"; // Custom response class for formatting API responses
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
+import mongoose from "mongoose";
 dotenv.config();
 const generateAccessTokenAndRefreshToken = async (user_id) => {
   try {
@@ -441,6 +442,79 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 });
 
 
+// Define the getWatchHistory function
+const getWatchHistory = asyncHandler(async (req, res) => {
+  // Perform an aggregation query on the User collection
+  const user = await User.aggregate([
+    // Match the user by their ID, which is extracted from the request
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user?._id)
+      }
+    },
+    // Perform a $lookup to join the 'videos' collection with the user's watchHistory
+    {
+      $lookup: {
+        from: "videos", // The collection to join with
+        localField: "watchHistory", // The field in the User document to match
+        foreignField: "_id", // The field in the Videos document to match
+        as: "watchHistory", // The name of the new array field to add to the User document
+        pipeline: [
+          // Another $lookup to join the 'users' collection with the owner field in the videos collection
+          {
+            $lookup: {
+              from: "users", // The collection to join with
+              localField: "owner", // The field in the Video document to match
+              foreignField: "_id", // The field in the User document to match
+              as: "owner", // The name of the new array field to add to the Video document
+              pipeline: [
+                // Project only specific fields from the User document
+                {
+                  $project: {
+                    fullname: 1,
+                    username: 1,
+                    avatar: 1,
+                  }
+                }
+              ]
+            }
+          },
+          // Add a new field 'owner' to the Video document, containing the first element of the 'owner' array
+          {
+            $addFields: {
+              owner: {
+                $first: "$owner"
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]);
+
+  // Ensure user is not empty before accessing user[0]
+  if (user.length === 0) {
+    return res.status(404).json(
+      new ApiResponse(
+        404,
+        [],
+        "User not found"
+      )
+    );
+  }
+
+  // Return the watch history of the user in the response
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      user[0].watchHistory, // The watch history array
+      "Watch history extracted successfully" // Success message
+    )
+  );
+});
+
+module.exports = getWatchHistory;
+
 export {
   registerUser,
   loginUser,
@@ -451,5 +525,6 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateCoverImage,
-  getUserChannelProfile
+  getUserChannelProfile,
+  getWatchHistory
 };
