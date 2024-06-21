@@ -348,6 +348,99 @@ const updateCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, updatedUser, "Cover image changed successfully!"));
 });
 
+
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  // Extract username from request parameters
+  const { username } = req.params;
+
+  // Check if the username is provided and is not empty or just whitespace
+  if (!username || !username.trim()) {
+    throw new ApiError(400, "Username is missing in URL");
+  }
+
+  try {
+    // Perform aggregation on the User collection to get channel profile
+    const channel = await User.aggregate([
+      // Stage 1: Match the user document with the provided username (case insensitive)
+      {
+        $match: {
+          username: username.trim().toLowerCase()
+        }
+      },
+      // Stage 2: Lookup to get the subscribers for the channel
+      {
+        $lookup: {
+          from: "subscriptions",        // Collection to join
+          localField: "_id",            // Field from the User collection
+          foreignField: "channel",      // Field from the Subscriptions collection
+          as: "Subscribers"             // Output array field
+        }
+      },
+      // Stage 3: Lookup to get the channels the user is subscribed to
+      {
+        $lookup: {
+          from: "subscriptions",        // Collection to join
+          localField: "_id",            // Field from the User collection
+          foreignField: "subscriber",   // Field from the Subscriptions collection
+          as: "SubscribedTo"            // Output array field
+        }
+      },
+      // Stage 4: Add calculated fields to the document
+      {
+        $addFields: {
+          subscribersCount: {
+            $size: "$Subscribers"       // Count the number of subscribers
+          },
+          channelsSubscribedToCount: {
+            $size: "$SubscribedTo"      // Count the number of channels the user is subscribed to
+          },
+          isSubscribed: {
+            $cond: {
+              if: { $in: [req.user?._id, "$Subscribers.subscriber"] }, // Check if the logged-in user is a subscriber
+              then: true,
+              else: false
+            }
+          }
+        }
+      },
+      // Stage 5: Project (select) specific fields to include in the final output
+      {
+        $project: {
+          username: 1,
+          email: 1,
+          fullname: 1,
+          avatar: 1,
+          coverImage: 1,
+          subscribersCount: 1,
+          channelsSubscribedToCount: 1,
+          isSubscribed: 1
+        }
+      }
+    ]);
+
+    // Log the output of the aggregation for debugging purposes
+    console.log(channel, "output after aggregation!");
+
+    // Check if the channel exists (aggregation returned a result)
+    if (!channel?.length) {
+      throw new ApiError(404, "Channel does not exist");
+    }
+
+    // Return the channel profile in the response
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        channel[0], // Since aggregation returns an array, get the first element
+        "User channel fetched successfully!"
+      )
+    );
+  } catch (error) {
+    // Handle any errors that occur during the aggregation or response building
+    throw new ApiError(500, "Internal Server Error at aggritions controller", error);
+  }
+});
+
+
 export {
   registerUser,
   loginUser,
@@ -358,4 +451,5 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateCoverImage,
+  getUserChannelProfile
 };
